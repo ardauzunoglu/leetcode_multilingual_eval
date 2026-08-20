@@ -56,6 +56,7 @@ def generate_with_vllm(
     min_p: float,
     repetition_penalty: float,
     seed: int,
+    reasoning_effort: str | None,
     tokenizer: str | None,
     revision: str | None,
     tokenizer_revision: str | None,
@@ -136,6 +137,7 @@ def generate_with_vllm(
             "repetition_penalty": repetition_penalty,
             "seed": seed,
         },
+        "reasoning_effort": reasoning_effort,
         "engine": engine_args,
         "chat_template": str(chat_template.resolve()) if chat_template else None,
         "chat_template_sha256": file_sha256(chat_template) if chat_template else None,
@@ -148,6 +150,7 @@ def generate_with_vllm(
         "n",
         "request_chunk_size",
         "sampling",
+        "reasoning_effort",
         "engine",
         "chat_template_sha256",
         "vllm_version",
@@ -197,6 +200,10 @@ def generate_with_vllm(
             kwargs = {"sampling_params": sampling, "use_tqdm": True}
             if template is not None:
                 kwargs["chat_template"] = template
+            if reasoning_effort is not None:
+                kwargs["chat_template_kwargs"] = {
+                    "reasoning_effort": reasoning_effort,
+                }
             outputs = llm.chat(conversations, **kwargs)
             for task, output in zip(chunk, outputs):
                 key = (str(task["task_id"]), str(task["language"]))
@@ -213,6 +220,7 @@ def generate_with_vllm(
                         "language": task["language"],
                         "sample_id": sample_id,
                         "model": model,
+                        "reasoning_effort": reasoning_effort,
                         "raw_text": raw_text,
                         "code": extract_code(raw_text),
                         "finish_reason": getattr(candidate, "finish_reason", None),

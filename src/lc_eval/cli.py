@@ -71,6 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
     generation.add_argument("--min-p", type=float, default=0.0)
     generation.add_argument("--repetition-penalty", type=float, default=1.0)
     generation.add_argument("--seed", type=int, default=13)
+    generation.add_argument(
+        "--reasoning-effort",
+        choices=("low", "medium", "high"),
+        help=(
+            "reasoning level passed to compatible model chat templates; "
+            "omit to use the template default"
+        ),
+    )
     engine = generate.add_argument_group("vLLM engine")
     engine.add_argument("--tokenizer")
     engine.add_argument("--revision")
@@ -175,6 +183,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             min_p=args.min_p,
             repetition_penalty=args.repetition_penalty,
             seed=args.seed,
+            reasoning_effort=args.reasoning_effort,
             tokenizer=args.tokenizer,
             revision=args.revision,
             tokenizer_revision=args.tokenizer_revision,

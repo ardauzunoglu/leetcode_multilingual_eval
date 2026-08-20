@@ -75,6 +75,7 @@ def _problem_prompt(description: str, language: str, signature: str, notes: str 
     extra = f"\n{notes.strip()}\n" if notes.strip() else "\n"
     return (
         f"Solve the following programming problem in {language}.\n\n"
+        f"Use only {language} and do not use syntax or imports from another language.\n\n"
         f"{description.strip()}\n\n"
         "Implement exactly this free-function interface:\n\n"
         f"```{language}\n{signature}\n```\n"

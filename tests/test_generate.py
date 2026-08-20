@@ -2,6 +2,8 @@ import json
 import sys
 import types
 
+import pytest
+
 from lc_eval.generate import generate_with_vllm
 from lc_eval.schema import write_jsonl
 
@@ -25,14 +27,18 @@ class FakeSamplingParams:
 
 
 class FakeLLM:
+    chat_calls = []
+
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
     def chat(self, conversations, sampling_params, **kwargs):
+        self.chat_calls.append(kwargs)
         return [FakeOutput(sampling_params.n) for _ in conversations]
 
 
 def test_resumable_generation(tmp_path, monkeypatch):
+    FakeLLM.chat_calls.clear()
     fake_vllm = types.ModuleType("vllm")
     fake_vllm.__version__ = "test"
     fake_vllm.LLM = FakeLLM
@@ -61,6 +67,7 @@ def test_resumable_generation(tmp_path, monkeypatch):
         min_p=0.0,
         repetition_penalty=1.0,
         seed=13,
+        reasoning_effort="high",
         tokenizer=None,
         revision=None,
         tokenizer_revision=None,
@@ -83,8 +90,18 @@ def test_resumable_generation(tmp_path, monkeypatch):
     rows = [json.loads(line) for line in output.read_text().splitlines()]
     assert [row["sample_id"] for row in rows] == [0, 1]
     assert rows[0]["code"].startswith("def solve")
+    assert rows[0]["reasoning_effort"] == "high"
+    assert FakeLLM.chat_calls == [
+        {
+            "use_tqdm": True,
+            "chat_template_kwargs": {"reasoning_effort": "high"},
+        }
+    ]
+    assert json.loads(config.read_text())["reasoning_effort"] == "high"
 
     second = generate_with_vllm(**kwargs)
     assert second["generated"] == 0
     assert second["already_complete"] == 1
 
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        generate_with_vllm(**{**kwargs, "reasoning_effort": "low"})

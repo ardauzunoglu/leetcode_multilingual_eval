@@ -104,6 +104,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 lc-eval generate \
   --output runs/generations.jsonl \
   --n 1 \
   --temperature 0 \
+  --reasoning-effort high \
   --max-tokens 4096 \
   --tensor-parallel-size 4
 ```
@@ -126,8 +127,63 @@ Generation is append-only and resumable. A task is skipped once sample IDs
 `0..n-1` are present. The adjacent config JSON records the model, task-file
 hash, vLLM version, engine settings, and decoding settings.
 
+For models with a compatible chat template, `--reasoning-effort` passes
+`low`, `medium`, or `high` through vLLM as the template's
+`reasoning_effort`. GPT-OSS supports all three levels and defaults to
+`medium`. Omit the option for models that do not support it. The selected
+level is recorded in both the run config and each generation record, and
+changing it requires a new output file rather than resuming an existing run.
+The included GPT-OSS script names outputs by effort level, for example:
+
+```bash
+REASONING_EFFORT=high bash generate.sh
+```
+
+The script also accepts sampling settings through environment variables. For
+example, a 20-sample pass@k run can be launched with:
+
+```bash
+REASONING_EFFORT=high \
+TEMPERATURE=0.2 \
+TOP_P=0.95 \
+TOP_K=50 \
+NUM_SAMPLES=20 \
+OUTPUT_PATH=runs/gpt-oss-20b/python_generations_high_n20.jsonl \
+bash generate.sh
+```
+
+Other supported variables are `MIN_P`, `REPETITION_PENALTY`, `SEED`, and
+`MAX_TOKENS`. Use a distinct `OUTPUT_PATH` whenever any generation setting
+changes; resume mode intentionally refuses to mix incompatible settings.
+`REPETITION_PENALTY` defaults to `1.05` for high reasoning to discourage the
+observed repetitive analysis loops, and to `1.0` for low and medium reasoning.
+Setting the variable explicitly overrides these defaults.
+
 Use `--languages mojo` to generate one language at a time while reusing the
 same prepared task file.
+
+### Run the full model/language/reasoning matrix
+
+`run_matrix.sh` sequentially runs generation, postprocessing, judging, and
+scoring for both GPT-OSS models, Python/Mojo/C++, and low/medium/high reasoning:
+
+```bash
+bash run_matrix.sh
+```
+
+The requested `mid` label is normalized to the GPT-OSS value `medium`. The
+runner is resumable through the underlying generation and judgment commands
+and checks all task files and container images before launching the first
+model. It requires:
+
+```text
+runs/python_tasks.jsonl
+runs/mojo_tasks.jsonl
+runs/cpp_tasks.jsonl
+containers/python-3.12-slim.sif
+containers/lc-eval-mojo.sif
+containers/lc-eval-mainstream.sif
+```
 
 ## 3. Postprocess model responses
 
@@ -177,6 +233,23 @@ On a cluster with Apptainer but no Docker daemon, convert prebuilt OCI images:
 apptainer build lc-eval-mainstream.sif docker://YOUR_REGISTRY/lc-eval-mainstream:ubuntu24.04
 apptainer build lc-eval-mojo.sif docker://YOUR_REGISTRY/lc-eval-mojo:1.0.0b2
 ```
+
+Alternatively, build the Mojo SIF directly from the included Apptainer
+definition without Docker:
+
+```bash
+mkdir -p .apptainer-cache .apptainer-tmp
+
+APPTAINER_CACHEDIR="$PWD/.apptainer-cache" \
+APPTAINER_TMPDIR="$PWD/.apptainer-tmp" \
+apptainer build --fakeroot \
+  --build-arg MOJO_VERSION=1.0.0b2 \
+  containers/lc-eval-mojo.sif \
+  containers/mojo.def
+```
+
+This requires unprivileged/fakeroot Apptainer builds to be enabled by the
+cluster administrator.
 
 ## 5. Judge generated code
 

@@ -6,3 +6,5 @@ runs/
 
 .venv*/
 *.sif
+.apptainer-cache/
+.apptainer-tmp/
